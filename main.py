@@ -1,5 +1,6 @@
-from tenacity import retry, stop_after_attempt, wait_fixed
-import concurrent.futures
+from retrying import retry, RetryError
+from time import sleep
+from concurrent.futures import ThreadPoolExecutor
 import st_btn_select
 from pathlib import Path
 import streamlit_scrollable_textbox as stx
@@ -15,64 +16,162 @@ def transcribe_file(file):
     print(f'File {file} Transcript Id: {transcript.id}')
     return transcript.id
 
-@retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
-def candidate_quality_assessment(transcript_id, jd, skills):
-    prompt = f'''
-        You are reading transcript of a job interview.
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
+def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
+    try:
+        prompt = f'''
+            You are reading transcript of a job interview.
 
-        Here is the job description for that interview: <jd>{jd}</jd>
+            Here is the job description for that interview: <jd>{jd}</jd>
 
-        Please pull out questions asked by interviewer and responses of interviewee.  The responses should be a string.
-        As a candidate assessor, please grade candidates answer to question with an integer grade based on rubric below:
-        Rubric:
-        5: Excellent
-        4: Good
-        3: Mediocre
-        2: Bad
-        1: Terrible
+            Here is a question asked by the interviewer in the transcript: <question>{q_a['question']}</question>
+            Here is the candidates answer: <answer>{q_a['answer']}</answer>
+            Reference the transcript for a more complete understanding of the candidates answer.
 
-        Then, tag the question and answer as relating to one of following skills:{skills}
+            As a candidate assessor, please grade candidates answer to the question with an integer grade based on rubric below:
+            Rubric:
+            5: Excellent
+            4: Good
+            3: Mediocre
+            2: Bad
+            1: Terrible
 
-        Return data in following JSON format: [{{'question':<question>,'answer':<answer>, 'skill':<skill>, 'grade',<int>}}].
-    '''
-    transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
-    result = transcript_group.lemur.task(
-        prompt=prompt,
-        max_output_size=4000,
-        final_model='default'
-    )
-    return json.loads(parse_json(result.response))
+            Then, tag the question and answer as relating to one of following skills:{skills}
 
-@retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
-def interviewer_quality_assessment(transcript_id, jd, skills):
-    prompt = f'''
-        You are reading a transcript of a job interview.
+            Return data in following XML format:
+            <grade>your_grade</grade>
+            <skill>your_skill</skill>
 
-        Here is the job description for that interview: <jd>{jd}</jd>
-
-        Please pull out the questions asked by the interviewer. The questions should be a string.
-        As an interviewer assessor, please grade the interviewers questions with an integer grade based on the rubric below:
-        Rubric:
-        5: Very Necessary
-        4: Critical
-        3: Moderately Important
-        2: Optional
-        1: Unneccessary
-
-        Then, tag the question as relating to one of the following skills:{skills}
-
-        Return the data in the following JSON format: [{{'question':<question>, 'skill':<skill>, 'grade',<int>}}].
-    '''
-    transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
-    result = transcript_group.lemur.task(
-        prompt=prompt,
-        max_output_size=4000,
-        final_model='default'
-    )
-    return json.loads(parse_json(result.response))
+        '''
+        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
+        result = transcript_group.lemur.task(
+            prompt=prompt,
+            max_output_size=4000,
+            final_model='default'
+        )
+        q_a['grade'] = parse_xml_data('grade',result.response)
+        q_a['skill'] = parse_xml_data('skill',result.response)
+        return q_a
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty array.")
+        q_a['grade'] = 0
+        q_a['skill'] = 'unknown'
+        return q_a
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        if '429' in e:
+            sleep(60)
+        raise
 
 
-@retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
+def get_questions(transcript_id, jd):
+    try:
+        prompt = f'''
+            You are reading transcript of a job interview.
+
+            Here is the job description for that interview: <jd>{jd}</jd>
+
+            Please pull out questions asked by interviewer and responses of the candidate. 
+            Format the questions as if they were appearing on a test.
+
+            Return data in following JSON format: [{{'question':<question>,'answer':<answer>}}].
+        '''
+        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
+        result = transcript_group.lemur.task(
+            prompt=prompt,
+            max_output_size=4000,
+            final_model='default'
+        )
+        print(result.response)
+        q_and_a_arr = parse_json(result.response)
+        # if 
+        if not q_and_a_arr:
+            print("q_and_a_arr is empty")
+            raise ValueError("q_and_a_arr is empty")
+        return parse_json(result.response)
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty array.")
+        return []
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        if '429' in e:
+            sleep(60)
+        raise
+
+
+def candidate_quality_assessment(transcript_id, jd, skills, q_and_a_arr):
+    args_list = [(q_a, transcript_id, jd, skills) for q_a in q_and_a_arr]
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit tasks with retries
+        tasks = [executor.submit(get_candidate_grade_and_skill, *args) for args in args_list]
+        results = [task.result() for task in tasks]
+
+        return results
+
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
+def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills):
+    try:
+        prompt = f'''
+            You are reading a transcript of a job interview.
+
+            Here is the job description for that interview: <jd>{jd}</jd>
+            
+            Here is a question asked by the interviewer in the transcript: <question>{q_a['question']}</question>
+            Here is the candidates answer: <answer>{q_a['answer']}</answer>
+            Reference the transcript for a more complete understanding of the interviewers question.
+
+            As an interviewer assessor, please grade the interviewers question with an integer grade based on the rubric below:
+            Rubric:
+            5: Very Necessary
+            4: Critical
+            3: Moderately Important
+            2: Optional
+            1: Unneccessary
+
+            Then, tag the question as relating to one of the following skills:{skills}
+
+            Return data in following XML format:
+            <grade>your_grade</grade>
+            <skill>your_skill</skill>
+        '''
+        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
+        result = transcript_group.lemur.task(
+            prompt=prompt,
+            max_output_size=4000,
+            final_model='default'
+        )
+        q_a['grade'] = parse_xml_data('grade',result.response)
+        q_a['skill'] = parse_xml_data('skill',result.response)
+        return q_a
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty array.")
+        q_a['grade'] = 0
+        q_a['skill'] = 'unknown'
+        return q_a
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        if '429' in e:
+            sleep(60)
+        raise
+
+def interviewer_quality_assessment(transcript_id, jd, skills,q_and_a_arr):
+    
+    args_list = [(q_a, transcript_id, jd, skills) for q_a in q_and_a_arr]
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit tasks with retries
+        tasks = [executor.submit(get_interviewer_grade_and_skill, *args) for args in args_list]
+        results = [task.result() for task in tasks]
+
+        return results
+
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_paragraph(transcript_id):
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
@@ -83,7 +182,7 @@ def generate_summary_paragraph(transcript_id):
     )
     return result.response
 
-@retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_topics(transcript_id):
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
@@ -94,7 +193,7 @@ def generate_summary_topics(transcript_id):
     )
     return result.response
 
-@retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_questions(transcript_id):
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
@@ -105,7 +204,7 @@ def generate_summary_questions(transcript_id):
     )
     return result.response
 
-@retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
+@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_question_answer(transcript_id):
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])
     # ask some questions
@@ -120,17 +219,43 @@ def generate_question_answer(transcript_id):
     return result.response
 
 def parse_json(response_string):
+    # Remove newline characters
+    response_string = response_string.replace('\n', ' ')
+
     start_index = response_string.find('[')
     end_index = response_string.rfind(']') + 1
-    json_text = response_string[start_index:end_index]
-    return json_text
+    # Check if both '[' and ']' are present in the response_string
+    if start_index == -1 or end_index == 0:
+        return []  # Return an empty array if either '[' or ']' is not present
+    json_content = response_string[start_index:end_index]
+    try:
+        response_json = json.loads(json_content)
+        return response_json
+    except json.JSONDecodeError as e:
+        # # errors are irrelevant, moves on if not found
+        # print(f"Error decoding JSON: {e}")
+        return [] 
+    
+def parse_xml_data(xml_word, response_string):
+    start_tag = f'<{xml_word}>'
+    end_tag = f'</{xml_word}>'
+    start_index = response_string.find(start_tag)
+    end_index = response_string.find(end_tag)
+    # Check if both start and end tags are present in the response_string
+    if start_index == -1 or end_index == -1:
+        return ''  # Return an empty string if either start or end tag is not present
+    content_start = start_index + len(start_tag)
+    xml_data = response_string[content_start:end_index].strip()
+    return xml_data
+
+
 
 def calculateQualityScore(arr):
   points = 0
   total = 0
   for n in arr:
     total += 5
-    points += n['grade']
+    points += int(n['grade'])
   return points/total
 
 # Initialize session_state if it doesn't exist
@@ -221,10 +346,13 @@ else: #running or complete page
                 st.write('Please input a file or URL.')
             st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
 
+            q_and_a_arr = get_questions(transcript_id,job_description)
+            print(q_and_a_arr)
+            with ThreadPoolExecutor() as executor:
+                # These 2 below can be split into more requests, likely enabling the execution of the code
+                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, q_and_a_arr)
+                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, q_and_a_arr)
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills)
-                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills)
                 future_3 = executor.submit(generate_summary_paragraph,transcript_id)
                 future_4 = executor.submit(generate_summary_topics,transcript_id)
                 # future_5 = executor.submit(generate_summary_questions,transcript_id)
