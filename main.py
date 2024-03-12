@@ -63,7 +63,7 @@ def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills, api_key):
     except RetryError:
         # Handle the case when all retries are used
         print("All retries used. Returning empty array.")
-        q_a['grade'] = 0
+        q_a['grade'] = 'unknown'
         q_a['skill'] = 'unknown'
         return q_a
     except Exception as e:
@@ -257,7 +257,7 @@ def parse_xml_data(xml_word, response_string):
     end_index = response_string.find(end_tag)
     # Check if both start and end tags are present in the response_string
     if start_index == -1 or end_index == -1:
-        return ''  # Return an empty string if either start or end tag is not present
+        return 'unknown'  # Return an empty string if either start or end tag is not present
     content_start = start_index + len(start_tag)
     xml_data = response_string[content_start:end_index].strip()
     return xml_data
@@ -265,12 +265,19 @@ def parse_xml_data(xml_word, response_string):
 
 
 def calculateQualityScore(arr):
-  points = 0
-  total = 0
-  for n in arr:
-    total += 5
-    points += int(n['grade'])
-  return points/total
+    points = 0
+    total = 0
+    for n in arr:
+        try:
+            grade = int(n['grade'])
+            total += 5
+            points += grade
+        except:
+            pass  # If grade is not convertible to int, do nothing
+    if total == 0:
+        return 0  # Avoid division by zero
+    return points / total
+
 
 # Initialize session_state if it doesn't exist
 if 'api_key' not in st.session_state:
