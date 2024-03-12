@@ -320,7 +320,7 @@ if st.session_state.homepage:
     # jd and skills
     st.write('Enter job description and skills list')
     job_description = st.text_area('Enter your job description')
-    skills = st.text_area('Enter the Skills List(comma separated):')
+    skills = st.text_area('Enter the Skills List:')
 
 
     button = st.button('Submit')
