@@ -16,6 +16,7 @@ aai.settings.api_key = st.session_state.api_key
 
 def transcribe_file(file):
     print('starting transcribe')
+    aai.settings.api_key = st.session_state.api_key
     transcript = aai.Transcriber().transcribe(file)
     print(f'File {file} Transcript Id: {transcript.id}')
     return transcript.id
@@ -54,6 +55,7 @@ def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
             <skill>your_skill</skill>
 
         '''
+        aai.settings.api_key = st.session_state.api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
         result = transcript_group.lemur.task(
             prompt=prompt,
@@ -90,6 +92,7 @@ def get_questions(transcript_id, jd):
 
             Return data in following JSON format: [{{"question":<question>,"answer":<answer>}}].
         '''
+        aai.settings.api_key = st.session_state.api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
         result = transcript_group.lemur.task(
             prompt=prompt,
@@ -151,6 +154,7 @@ def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills):
             <grade>your_grade</grade>
             <skill>your_skill</skill>
         '''
+        aai.settings.api_key = st.session_state.api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
         result = transcript_group.lemur.task(
             prompt=prompt,
@@ -185,6 +189,7 @@ def interviewer_quality_assessment(transcript_id, jd, skills,q_and_a_arr):
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_paragraph(transcript_id):
+    aai.settings.api_key = st.session_state.api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
@@ -196,6 +201,7 @@ def generate_summary_paragraph(transcript_id):
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_topics(transcript_id):
+    aai.settings.api_key = st.session_state.api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
@@ -207,6 +213,7 @@ def generate_summary_topics(transcript_id):
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_questions(transcript_id):
+    aai.settings.api_key = st.session_state.api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
         context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
@@ -218,6 +225,7 @@ def generate_summary_questions(transcript_id):
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_question_answer(transcript_id):
+    aai.settings.api_key = st.session_state.api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])
     # ask some questions
     questions = [
@@ -354,6 +362,7 @@ else: #running or complete page
                 transcript_id = transcribe_file(url_input)
             else:
                 st.write('Please input a file or URL.')
+            aai.settings.api_key = st.session_state.api_key
             st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
 
             print('starting q_a_request')
