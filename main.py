@@ -318,10 +318,10 @@ if st.session_state.homepage:
 
 
 else: #running or complete page
+    aai.settings.api_key = st.session_state.api_key
     if st.session_state.complete == False:
         st.write('')
         with st.spinner('Loading...'):
-            aai.settings.api_key = st.session_state.api_key
             transcript_id_input = st.session_state.transcript_id_input
             local_file = st.session_state.local_file
             url_input = st.session_state.url_input
