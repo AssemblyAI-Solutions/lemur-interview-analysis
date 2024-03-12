@@ -10,6 +10,10 @@ import streamlit as st
 import json
 import re
 
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ""
+aai.settings.api_key = st.session_state.api_key
+
 def transcribe_file(file):
     print('starting transcribe')
     transcript = aai.Transcriber().transcribe(file)
@@ -267,8 +271,7 @@ def calculateQualityScore(arr):
   return points/total
 
 # Initialize session_state if it doesn't exist
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
+
 
 if 'homepage' not in st.session_state:
     st.session_state.homepage = True
@@ -326,7 +329,6 @@ if st.session_state.homepage:
 
 
 else: #running or complete page
-    aai.settings.api_key = st.session_state.api_key
     if st.session_state.complete == False:
         st.write('')
         with st.spinner('Loading...'):
