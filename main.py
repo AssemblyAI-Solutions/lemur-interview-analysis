@@ -101,7 +101,7 @@ def get_questions(transcript_id, jd, api_key):
         if not q_and_a_arr:
             print("q_and_a_arr is empty")
             raise ValueError("q_and_a_arr is empty")
-        return parse_json(result.response)
+        return q_and_a_arr
     except RetryError:
         # Handle the case when all retries are used
         print("All retries used. Returning empty array.")
@@ -162,7 +162,7 @@ def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills, api_key):
     except RetryError:
         # Handle the case when all retries are used
         print("All retries used. Returning empty array.")
-        q_a['grade'] = 0
+        q_a['grade'] = 'unknown'
         q_a['skill'] = 'unknown'
         return q_a
     except Exception as e:
