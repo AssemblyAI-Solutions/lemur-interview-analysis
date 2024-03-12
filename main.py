@@ -16,6 +16,13 @@ def transcribe_file(file):
     print(f'File {file} Transcript Id: {transcript.id}')
     return transcript.id
 
+def filter_q_and_a(q_and_a_arr):
+    filtered_arr = []
+    for item in q_and_a_arr:
+        if "question" in item and "answer" in item:
+            filtered_arr.append(item)
+    return filtered_arr
+
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
     try:
@@ -86,7 +93,8 @@ def get_questions(transcript_id, jd):
             final_model='anthropic/claude-2-1'
         )
         print(result.response)
-        q_and_a_arr = parse_json(result.response)
+        q_and_a_arr = filter_q_and_a(parse_json(result.response))
+
         # if 
         if not q_and_a_arr:
             print("q_and_a_arr is empty")
