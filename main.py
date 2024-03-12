@@ -10,8 +10,8 @@ import streamlit as st
 import json
 import re
 
-@st.cache_data
 def transcribe_file(file):
+    print('starting transcribe')
     transcript = aai.Transcriber().transcribe(file)
     print(f'File {file} Transcript Id: {transcript.id}')
     return transcript.id
@@ -77,7 +77,7 @@ def get_questions(transcript_id, jd):
             Please pull out questions asked by interviewer and responses of the candidate. 
             Format the questions as if they were appearing on a test.
 
-            Return data in following JSON format: [{{'question':<question>,'answer':<answer>}}].
+            Return data in following JSON format: [{{"question":<question>,"answer":<answer>}}].
         '''
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
         result = transcript_group.lemur.task(
@@ -338,14 +338,14 @@ else: #running or complete page
                     temp_file.write(file_bytes)
 
                 # API call to transcribe the file
-                transcript = aai.Transcriber().transcribe(f'temp_file{file_extension}')
-                transcript_id = transcript.id
+                transcript_id = transcribe_file(f'temp_file{file_extension}')
             elif url_input != '':
                 transcript_id = transcribe_file(url_input)
             else:
                 st.write('Please input a file or URL.')
             st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
 
+            print('starting q_a_request')
             q_and_a_arr = get_questions(transcript_id,job_description)
             print(q_and_a_arr)
             with ThreadPoolExecutor() as executor:
