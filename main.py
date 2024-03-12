@@ -47,7 +47,7 @@ def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
         result = transcript_group.lemur.task(
             prompt=prompt,
             max_output_size=4000,
-            final_model='default'
+            final_model='anthropic/claude-2-1'
         )
         q_a['grade'] = parse_xml_data('grade',result.response)
         q_a['skill'] = parse_xml_data('skill',result.response)
@@ -83,7 +83,7 @@ def get_questions(transcript_id, jd):
         result = transcript_group.lemur.task(
             prompt=prompt,
             max_output_size=4000,
-            final_model='default'
+            final_model='anthropic/claude-2-1'
         )
         print(result.response)
         q_and_a_arr = parse_json(result.response)
@@ -143,7 +143,7 @@ def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills):
         result = transcript_group.lemur.task(
             prompt=prompt,
             max_output_size=4000,
-            final_model='default'
+            final_model='anthropic/claude-2-1'
         )
         q_a['grade'] = parse_xml_data('grade',result.response)
         q_a['skill'] = parse_xml_data('skill',result.response)
@@ -178,7 +178,7 @@ def generate_summary_paragraph(transcript_id):
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
         answer_format="paragraph",
         max_output_size=4000,
-        final_model='default'
+        final_model='anthropic/claude-2-1'
     )
     return result.response
 
@@ -189,7 +189,7 @@ def generate_summary_topics(transcript_id):
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
         answer_format="**<topic header>**\n<topic summary>\n",
         max_output_size=4000,
-        final_model='default'
+        final_model='anthropic/claude-2-1'
     )
     return result.response
 
@@ -200,7 +200,7 @@ def generate_summary_questions(transcript_id):
         context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
         answer_format="<Interview Question>,• <Candidate Response>",
         max_output_size=4000,
-        final_model='default'
+        final_model='anthropic/claude-2-1'
     )
     return result.response
 
