@@ -10,13 +10,8 @@ import streamlit as st
 import json
 import re
 
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
-aai.settings.api_key = st.session_state.api_key
-
 def transcribe_file(file):
     print('starting transcribe')
-    aai.settings.api_key = st.session_state.api_key
     transcript = aai.Transcriber().transcribe(file)
     print(f'File {file} Transcript Id: {transcript.id}')
     return transcript.id
@@ -29,7 +24,7 @@ def filter_q_and_a(q_and_a_arr):
     return filtered_arr
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
+def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills, api_key):
     try:
         prompt = f'''
             You are reading transcript of a job interview.
@@ -55,7 +50,7 @@ def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
             <skill>your_skill</skill>
 
         '''
-        aai.settings.api_key = st.session_state.api_key
+        aai.settings.api_key = api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
         result = transcript_group.lemur.task(
             prompt=prompt,
@@ -80,7 +75,7 @@ def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills):
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_questions(transcript_id, jd):
+def get_questions(transcript_id, jd, api_key):
     try:
         prompt = f'''
             You are reading transcript of a job interview.
@@ -92,7 +87,7 @@ def get_questions(transcript_id, jd):
 
             Return data in following JSON format: [{{"question":<question>,"answer":<answer>}}].
         '''
-        aai.settings.api_key = st.session_state.api_key
+        aai.settings.api_key = api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
         result = transcript_group.lemur.task(
             prompt=prompt,
@@ -119,8 +114,8 @@ def get_questions(transcript_id, jd):
         raise
 
 
-def candidate_quality_assessment(transcript_id, jd, skills, q_and_a_arr):
-    args_list = [(q_a, transcript_id, jd, skills) for q_a in q_and_a_arr]
+def candidate_quality_assessment(transcript_id, jd, skills, q_and_a_arr, api_key):
+    args_list = [(q_a, transcript_id, jd, skills, api_key) for q_a in q_and_a_arr]
     with ThreadPoolExecutor(max_workers=10) as executor:
         # Submit tasks with retries
         tasks = [executor.submit(get_candidate_grade_and_skill, *args) for args in args_list]
@@ -129,7 +124,7 @@ def candidate_quality_assessment(transcript_id, jd, skills, q_and_a_arr):
         return results
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills):
+def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills, api_key):
     try:
         prompt = f'''
             You are reading a transcript of a job interview.
@@ -154,7 +149,7 @@ def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills):
             <grade>your_grade</grade>
             <skill>your_skill</skill>
         '''
-        aai.settings.api_key = st.session_state.api_key
+        aai.settings.api_key = api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
         result = transcript_group.lemur.task(
             prompt=prompt,
@@ -177,9 +172,9 @@ def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills):
             sleep(60)
         raise
 
-def interviewer_quality_assessment(transcript_id, jd, skills,q_and_a_arr):
+def interviewer_quality_assessment(transcript_id, jd, skills,q_and_a_arr, api_key):
     
-    args_list = [(q_a, transcript_id, jd, skills) for q_a in q_and_a_arr]
+    args_list = [(q_a, transcript_id, jd, skills, api_key) for q_a in q_and_a_arr]
     with ThreadPoolExecutor(max_workers=10) as executor:
         # Submit tasks with retries
         tasks = [executor.submit(get_interviewer_grade_and_skill, *args) for args in args_list]
@@ -188,8 +183,8 @@ def interviewer_quality_assessment(transcript_id, jd, skills,q_and_a_arr):
         return results
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_summary_paragraph(transcript_id):
-    aai.settings.api_key = st.session_state.api_key
+def generate_summary_paragraph(transcript_id, api_key):
+    aai.settings.api_key = api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
@@ -200,8 +195,8 @@ def generate_summary_paragraph(transcript_id):
     return result.response
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_summary_topics(transcript_id):
-    aai.settings.api_key = st.session_state.api_key
+def generate_summary_topics(transcript_id, api_key):
+    aai.settings.api_key = api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
@@ -213,7 +208,6 @@ def generate_summary_topics(transcript_id):
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_questions(transcript_id):
-    aai.settings.api_key = st.session_state.api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
     result = transcript_group.lemur.summarize(
         context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
@@ -224,8 +218,8 @@ def generate_summary_questions(transcript_id):
     return result.response
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_question_answer(transcript_id):
-    aai.settings.api_key = st.session_state.api_key
+def generate_question_answer(transcript_id, api_key):
+    aai.settings.api_key = api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])
     # ask some questions
     questions = [
@@ -279,7 +273,8 @@ def calculateQualityScore(arr):
   return points/total
 
 # Initialize session_state if it doesn't exist
-
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ""
 
 if 'homepage' not in st.session_state:
     st.session_state.homepage = True
@@ -337,6 +332,7 @@ if st.session_state.homepage:
 
 
 else: #running or complete page
+    api_key = st.session_state.api_key
     if st.session_state.complete == False:
         st.write('')
         with st.spinner('Loading...'):
@@ -362,21 +358,20 @@ else: #running or complete page
                 transcript_id = transcribe_file(url_input)
             else:
                 st.write('Please input a file or URL.')
-            aai.settings.api_key = st.session_state.api_key
             st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
 
             print('starting q_a_request')
-            q_and_a_arr = get_questions(transcript_id,job_description)
+            q_and_a_arr = get_questions(transcript_id,job_description,api_key)
             print(q_and_a_arr)
             with ThreadPoolExecutor() as executor:
                 # These 2 below can be split into more requests, likely enabling the execution of the code
-                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, q_and_a_arr)
-                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, q_and_a_arr)
+                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, q_and_a_arr, api_key)
+                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, q_and_a_arr, api_key)
 
-                future_3 = executor.submit(generate_summary_paragraph,transcript_id)
-                future_4 = executor.submit(generate_summary_topics,transcript_id)
+                future_3 = executor.submit(generate_summary_paragraph,transcript_id, api_key)
+                future_4 = executor.submit(generate_summary_topics,transcript_id, api_key)
                 # future_5 = executor.submit(generate_summary_questions,transcript_id)
-                future_6 = executor.submit(generate_question_answer,transcript_id)
+                future_6 = executor.submit(generate_question_answer,transcript_id, api_key)
 
 
             st.session_state.parsed_candidate_assessment = future_1.result()
