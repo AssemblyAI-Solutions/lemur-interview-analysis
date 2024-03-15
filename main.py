@@ -514,9 +514,11 @@ else: #running or complete page
 
             # Assuming skills, temp_candidate_assessment, and temp_interviewer_audio are arrays with the same length
             for i in range(len(temp_candidate_assessment)):
-                skill = skills[i]['skill']  # Get the skill dictionary at index i
-                temp_candidate_assessment[i]['skill'] = skill  # Add the skill to the candidate assessment dictionary
-                temp_interviewer_audit[i]['skill'] = skill  # Add the skill to the interviewer audio dictionary
+                try:
+                    skill = skills[i]['skill']  # Get the skill dictionary at index i
+                    temp_candidate_assessment[i]['skill'] = skill  # Add the skill to the candidate assessment dictionary
+                    temp_interviewer_audit[i]['skill'] = skill  # Add the skill to the interviewer audio dictionary
+                except: pass
 
 
             st.session_state.parsed_candidate_assessment = temp_candidate_assessment
