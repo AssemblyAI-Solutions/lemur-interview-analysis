@@ -24,59 +24,6 @@ def filter_q_and_a(q_and_a_arr):
     return filtered_arr
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_candidate_grade_and_skill(q_a, transcript_id, jd, skills, api_key):
-    try:
-        prompt = f'''
-            You are reading transcript of a job interview.
-
-            Here is the job description for that interview: <jd>{jd}</jd>
-
-            Here is a question asked by the interviewer in the transcript: <question>{q_a['question']}</question>
-            Here is the candidates answer: <answer>{q_a['answer']}</answer>
-            Reference the transcript for a more complete understanding of the candidates answer.
-
-            As a candidate assessor, please grade candidates answer to the question with an integer grade based on rubric below:
-            Rubric:
-            5: Excellent
-            4: Good
-            3: Mediocre
-            2: Bad
-            1: Terrible
-
-            Then, tag the question and answer as relating to one of following skills:{skills}
-
-            Return data in following XML format:
-            <grade>your_grade</grade>
-            <skill>your_skill</skill>
-
-        '''
-        aai.settings.api_key = api_key
-        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
-        result = transcript_group.lemur.task(
-            prompt=prompt,
-            max_output_size=4000,
-            final_model='anthropic/claude-2-1'
-        )
-        q_a['grade'] = parse_xml_data('grade',result.response)
-        q_a['skill'] = parse_xml_data('skill',result.response)
-        return q_a
-    except RetryError:
-        # Handle the case when all retries are used
-        print("All retries used. Returning empty array.")
-        q_a['grade'] = 'unknown'
-        q_a['skill'] = 'unknown'
-        return q_a
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        print("Re-running LeMUR Request")
-        try:
-            if '429' in e:
-                sleep(60)
-        except: pass
-        raise
-
-
-@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def get_questions(transcript_id, jd, api_key):
     try:
         prompt = f'''
@@ -248,67 +195,6 @@ def interviewer_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_a
         raise
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_interviewer_grade_and_skill(q_a, transcript_id, jd, skills, api_key):
-    try:
-        prompt = f'''
-            You are reading a transcript of a job interview.
-
-            Here is the job description for that interview: <jd>{jd}</jd>
-            
-            Here is a question asked by the interviewer in the transcript: <question>{q_a['question']}</question>
-            Here is the candidates answer: <answer>{q_a['answer']}</answer>
-            Reference the transcript for a more complete understanding of the interviewers question.
-
-            As an interviewer assessor, please grade the interviewers question with an integer grade based on the rubric below:
-            Rubric:
-            5: Very Necessary
-            4: Critical
-            3: Moderately Important
-            2: Optional
-            1: Unneccessary
-
-            Then, tag the question as relating to one of the following skills:{skills}
-
-            Return data in following XML format:
-            <grade>your_grade</grade>
-            <skill>your_skill</skill>
-        '''
-        aai.settings.api_key = api_key
-        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
-        result = transcript_group.lemur.task(
-            prompt=prompt,
-            max_output_size=4000,
-            final_model='anthropic/claude-2-1'
-        )
-        q_a['grade'] = parse_xml_data('grade',result.response)
-        q_a['skill'] = parse_xml_data('skill',result.response)
-        return q_a
-    except RetryError:
-        # Handle the case when all retries are used
-        print("All retries used. Returning empty array.")
-        q_a['grade'] = 'unknown'
-        q_a['skill'] = 'unknown'
-        return q_a
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        print("Re-running LeMUR Request")
-        try:
-            if '429' in e:
-                sleep(60)
-        except: pass
-        raise
-
-# def interviewer_quality_assessment(transcript_id, jd, skills,q_and_a_arr, api_key):
-    
-#     args_list = [(q_a, transcript_id, jd, skills, api_key) for q_a in q_and_a_arr]
-#     with ThreadPoolExecutor(max_workers=10) as executor:
-#         # Submit tasks with retries
-#         tasks = [executor.submit(get_interviewer_grade_and_skill, *args) for args in args_list]
-#         results = [task.result() for task in tasks]
-
-#         return results
-
-@retry(wait_fixed=1000, stop_max_attempt_number=10)
 def generate_summary_paragraph(transcript_id, api_key):
     aai.settings.api_key = api_key
     transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
@@ -376,19 +262,6 @@ def parse_json(response_string):
         print(f"Error decoding JSON: {e}")
         return [] 
     
-def parse_xml_data(xml_word, response_string):
-    start_tag = f'<{xml_word}>'
-    end_tag = f'</{xml_word}>'
-    start_index = response_string.find(start_tag)
-    end_index = response_string.find(end_tag)
-    # Check if both start and end tags are present in the response_string
-    if start_index == -1 or end_index == -1:
-        return 'unknown'  # Return an empty string if either start or end tag is not present
-    content_start = start_index + len(start_tag)
-    xml_data = response_string[content_start:end_index].strip()
-    return xml_data
-
-
 
 def calculateQualityScore(arr):
     points = 0
