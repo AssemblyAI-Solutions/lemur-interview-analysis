@@ -278,158 +278,121 @@ def calculateQualityScore(arr):
 
 # Initialize session_state if it doesn't exist
 if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
-
+    st.session_state.api_key = ''
 if 'homepage' not in st.session_state:
     st.session_state.homepage = True
-
 if 'complete' not in st.session_state:
     st.session_state.complete = False
-
-# Initialize session_state if it doesn't exist
 if 'transcript_id_input' not in st.session_state:
     st.session_state.transcript_id_input = ''
 if 'local_file' not in st.session_state:
     st.session_state.local_file = None
 if 'url_input' not in st.session_state:
     st.session_state.url_input = ''
-if 'transcript_text_input' not in st.session_state:  # New state for transcript text input
-    st.session_state.transcript_text_input = ''
 if 'job_description' not in st.session_state:
     st.session_state.job_description = ''
 if 'skills' not in st.session_state:
     st.session_state.skills = ''
 if 'transcript_text' not in st.session_state:
     st.session_state.transcript_text = ''
-if 'transcript_format' not in st.session_state:  # New state for transcript format selection
-    st.session_state.transcript_format = 'Transcript ID'
 
 st.title('Interviewer Audit and Candidate Assessment')
 
 if st.session_state.homepage:
     # api key
-    api_key = st.text_input('Enter your AssemblyAI API key: ',value=st.session_state.api_key , type='password')
+    api_key = st.text_input('Enter your AssemblyAI API key: ', value=st.session_state.api_key, type='password')
     aai.settings.api_key = api_key
     st.session_state.api_key = api_key
 
     # File
-    st.write('Provide your interview transcript in one of the following formats:')
-    transcript_format = st.selectbox('Transcript Format', ('Transcript ID', 'Audio File', 'Audio File URL', 'Transcript Text'))
-    st.session_state.transcript_format = transcript_format  # Store the selected format
-
-    if transcript_format == 'Transcript ID':
-        transcript_id_input = st.text_input('Enter your transcript id','')
-    elif transcript_format == 'Audio File':
-        local_file = st.file_uploader('Upload your interview audio/video transcript', accept_multiple_files=False)
-    elif transcript_format == 'Audio File URL':
-        url_input = st.text_input('Enter the URL of interview transcript', '')
-    elif transcript_format == 'Transcript Text':
-        transcript_text_input = st.text_area('Enter your transcript text', height=200)
+    st.write('Provide either a transcript id, url of your interview file, a local file, or enter the transcript text directly.')
+    transcript_id_input = st.text_input('Enter your transcript id', '')
+    local_file = st.file_uploader('Or upload your interview audio/video transcript', accept_multiple_files=False)
+    url_input = st.text_input('Or enter the URL of interview transcript', '')
+    transcript_text = st.text_area('Or enter the transcript text directly', '')
 
     # jd and skills
     st.write('Enter job description and skills list')
     job_description = st.text_area('Enter your job description')
     skills = st.text_area('Enter the Skills List:')
 
-
     button = st.button('Submit')
-
     if button:
-        if transcript_format == 'Transcript ID' and transcript_id_input == '':
-            st.write('Please input a transcript ID.')
-        elif transcript_format == 'Audio File' and local_file is None:
-            st.write('Please upload an audio file.')
-        elif transcript_format == 'Audio File URL' and url_input == '':
-            st.write('Please input an audio file URL.')
-        elif transcript_format == 'Transcript Text' and transcript_text_input == '':
-            st.write('Please input your transcript text.')
+        if transcript_id_input == '' and local_file is None and url_input == '' and transcript_text == '':
+            st.write('Please input a file, URL, or transcript text.')
         else:
             st.session_state.homepage = False
-            st.session_state.transcript_id_input = transcript_id_input if transcript_format == 'Transcript ID' else ''
-            st.session_state.local_file = local_file if transcript_format == 'Audio File' else None
-            st.session_state.url_input = url_input if transcript_format == 'Audio File URL' else ''
-            st.session_state.transcript_text_input = transcript_text_input if transcript_format == 'Transcript Text' else ''
+            st.session_state.transcript_id_input = transcript_id_input
+            st.session_state.local_file = local_file
+            st.session_state.url_input = url_input
             st.session_state.job_description = job_description
             st.session_state.skills = skills
+            st.session_state.transcript_text = transcript_text
             st.rerun()
-
-
 else: #running or complete page
     api_key = st.session_state.api_key
     if st.session_state.complete == False:
         st.write('')
         with st.spinner('Loading...'):
-            transcript_id = None
             transcript_id_input = st.session_state.transcript_id_input
             local_file = st.session_state.local_file
             url_input = st.session_state.url_input
-            transcript_text_input = st.session_state.transcript_text_input
             job_description = st.session_state.job_description
             skills = st.session_state.skills
+            transcript_text = st.session_state.transcript_text
 
-            try:
-                if transcript_id_input:
-                    transcript_id = transcript_id_input
-                elif local_file is not None:
-                    file_bytes = local_file.read()
-                    file_extension = Path(local_file.name).suffix
-                    with open(f'temp_file{file_extension}', 'wb') as temp_file:
-                        temp_file.write(file_bytes)
-                    transcript_id = transcribe_file(f'temp_file{file_extension}')
-                elif url_input:
-                    transcript_id = transcribe_file(url_input)
-                elif transcript_text_input:
-                    # Handle transcript text input
-                    # You might need to create a transcript from this text
-                    # or use it directly in your analysis
-                    st.session_state.transcript_text = transcript_text_input
-                else:
-                    st.error('Please input a transcript ID, upload an audio file, provide a URL, or enter transcript text.')
-                    st.stop()
-
-                if transcript_id:
-                    st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
-                
-                if not st.session_state.transcript_text:
-                    st.error('Failed to obtain transcript text.')
-                    st.stop()
-
-                # Continue with the rest of your code...
-                print('starting q_a_request')
-                q_and_a_arr = get_questions(transcript_id, job_description, api_key)
-                print(q_and_a_arr)
-
-                with ThreadPoolExecutor() as executor:
-                    future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                    future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                    future_7 = executor.submit(get_skills, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                    future_3 = executor.submit(generate_summary_paragraph, transcript_id, api_key)
-                    future_4 = executor.submit(generate_summary_topics, transcript_id, api_key)
-                    future_6 = executor.submit(generate_question_answer, transcript_id, api_key)
-
-                skills = future_7.result()
-                temp_candidate_assessment = future_1.result()
-                temp_interviewer_audit = future_2.result()
-
-                # Assuming skills, temp_candidate_assessment, and temp_interviewer_audio are arrays with the same length
-                for i in range(len(temp_candidate_assessment)):
-                    try:
-                        skill = skills[i]['skill']  # Get the skill dictionary at index i
-                        temp_candidate_assessment[i]['skill'] = skill  # Add the skill to the candidate assessment dictionary
-                        temp_interviewer_audit[i]['skill'] = skill  # Add the skill to the interviewer audio dictionary
-                    except: pass
-
-                st.session_state.parsed_candidate_assessment = temp_candidate_assessment
-                st.session_state.parsed_interviewer_audit = temp_interviewer_audit
-                
-                st.session_state.summary_paragraph = future_3.result()
-                st.session_state.summary_topics = future_4.result()
-                st.session_state.question_answer = future_6.result()
-                st.session_state.complete = True
-
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+            if transcript_id_input != '':
+                transcript_id = transcript_id_input
+            elif local_file is not None:
+                file_bytes = local_file.read()
+                file_extension = Path(local_file.name).suffix
+                with open(f'temp_file{file_extension}', 'wb') as temp_file:
+                    temp_file.write(file_bytes)
+                transcript_id = transcribe_file(f'temp_file{file_extension}')
+            elif url_input != '':
+                transcript_id = transcribe_file(url_input)
+            elif transcript_text != '':
+                # If transcript text is provided, we don't need to transcribe
+                st.session_state.transcript_text = transcript_text
+                # Create a temporary transcript ID
+                transcript_id = 'temp_transcript_id'
+            else:
+                st.write('Please input a file, URL, or transcript text.')
                 st.stop()
+
+            if transcript_text == '':
+                st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
+            
+            print('starting q_a_request')
+            q_and_a_arr = get_questions(transcript_id, job_description, api_key)
+            print(q_and_a_arr)
+
+            with ThreadPoolExecutor() as executor:
+                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
+                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
+                future_7 = executor.submit(get_skills, transcript_id, job_description, skills, api_key, q_and_a_arr)
+                future_3 = executor.submit(generate_summary_paragraph, transcript_id, api_key)
+                future_4 = executor.submit(generate_summary_topics, transcript_id, api_key)
+                future_6 = executor.submit(generate_question_answer, transcript_id, api_key)
+
+            skills = future_7.result()
+            temp_candidate_assessment = future_1.result()
+            temp_interviewer_audit = future_2.result()
+
+            for i in range(len(temp_candidate_assessment)):
+                try:
+                    skill = skills[i]['skill']
+                    temp_candidate_assessment[i]['skill'] = skill
+                    temp_interviewer_audit[i]['skill'] = skill
+                except: pass
+
+            st.session_state.parsed_candidate_assessment = temp_candidate_assessment
+            st.session_state.parsed_interviewer_audit = temp_interviewer_audit
+            
+            st.session_state.summary_paragraph = future_3.result()
+            st.session_state.summary_topics = future_4.result()
+            st.session_state.question_answer = future_6.result()
+            st.session_state.complete = True
     
     st.write('')
     button2 = st.button('RESET')
@@ -451,41 +414,44 @@ else: #running or complete page
 
     st.subheader('Transcript Text:')
     stx.scrollableTextbox(st.session_state.transcript_text)
-    st.markdown("\n" * 1)
-    option = st_btn_select.st_btn_select(('Paragraph Summary', 'Topic Summary', 'Basic Question-Answer','Candidate Assessment', 'Interviewer Assessment'), index=0)
+    st.markdown('\n' * 1)
+
+    option = st_btn_select.st_btn_select(('Paragraph Summary', 'Topic Summary', 'Basic Question-Answer', 'Candidate Assessment', 'Interviewer Assessment'), index=0)
+    
     if option == 'Candidate Assessment':
         st.subheader('Candidate Assessment')
         for q in st.session_state.parsed_candidate_assessment:
-            st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ') # Add a line
+            st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ')
             st.write('Question: ' + q['question'])
             st.write('Answer: ' + q['answer'])
             st.write('Skill: ' + q['skill'])
             st.write('Grade: ' + str(q['grade']))
-        st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ') # Add a line
-        st.write("Quality Score: "+str(calculateQualityScore(st.session_state.parsed_candidate_assessment)*100))
-        st.write("Quality score formula: (total points)/(5 * # of questions *)")
+        st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ')
+        st.write('Quality Score: '+str(calculateQualityScore(st.session_state.parsed_candidate_assessment)*100))
+        st.write('Quality score formula: (total points)/(5 * # of questions *)')
+
     if option == 'Interviewer Assessment':
         st.subheader('Interviewer Assessment')
         for q in st.session_state.parsed_interviewer_audit:
-            st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ') # Add a line
+            st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ')
             st.write('Question: ' + q['question'])
             st.write('Grade: ' + str(q['grade']))
             st.write('Skill: ' + q['skill'])
-        st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ') # Add a line
-        st.write("Quality Score: "+str(calculateQualityScore(st.session_state.parsed_interviewer_audit)*100))
-        st.write("Quality score formula: (total points)/(5 * # of questions *)")
+        st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ')
+        st.write('Quality Score: '+str(calculateQualityScore(st.session_state.parsed_interviewer_audit)*100))
+        st.write('Quality score formula: (total points)/(5 * # of questions *)')
+
     if option == 'Paragraph Summary':
         st.subheader('Paragraph Summary')
         st.write(st.session_state.summary_paragraph)
+
     if option == 'Topic Summary':
         st.subheader('Topic Summary')
         st.write(st.session_state.summary_topics)
-    # if option == 'Interviewer Questions':
-    #     st.subheader('Interviewer Questions')
-    #     st.write(st.session_state.summary_questions)
+
     if option == 'Basic Question-Answer':
         st.subheader('Basic Question-Answer')
         for q in st.session_state.question_answer:
-            st.write(f"{q.question}")
-            st.write(f"Answer: {q.answer}")
+            st.write(f'{q.question}')
+            st.write(f'Answer: {q.answer}')
             st.write()
