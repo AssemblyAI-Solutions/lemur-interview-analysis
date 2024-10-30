@@ -345,10 +345,10 @@ if st.session_state.homepage:
             st.write('Please input your transcript text.')
         else:
             st.session_state.homepage = False
-            st.session_state.transcript_id_input = transcript_id_input
-            st.session_state.local_file = local_file
-            st.session_state.url_input = url_input
-            st.session_state.transcript_text_input = transcript_text_input  # Store transcript text input
+            st.session_state.transcript_id_input = transcript_id_input if transcript_format == 'Transcript ID' else ''
+            st.session_state.local_file = local_file if transcript_format == 'Audio File' else None
+            st.session_state.url_input = url_input if transcript_format == 'Audio File URL' else ''
+            st.session_state.transcript_text_input = transcript_text_input if transcript_format == 'Transcript Text' else ''
             st.session_state.job_description = job_description
             st.session_state.skills = skills
             st.rerun()
