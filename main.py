@@ -41,12 +41,11 @@ def get_questions(transcript_id, jd, api_key):
         result = transcript_group.lemur.task(
             prompt=prompt,
             max_output_size=4000,
-            final_model='anthropic/claude-2-1'
+            final_model='anthropic/claude-3-5-sonnet'
         )
         print(result.response)
         q_and_a_arr = filter_q_and_a(parse_json(result.response))
 
-        # if 
         if not q_and_a_arr:
             print("q_and_a_arr is empty")
             raise ValueError("q_and_a_arr is empty")
@@ -84,7 +83,7 @@ def get_skills(transcript_id, jd, skills, api_key, q_and_a_arr):
         result = transcript_group.lemur.task(
             prompt=new_prompt,
             max_output_size=4000,
-            final_model='anthropic/claude-2-1'
+            final_model='anthropic/claude-3-5-sonnet'
         )
         print(result.response)
         final_q_and_a_arr = parse_json(result.response)
@@ -125,14 +124,14 @@ def candidate_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_arr
             2: Bad
             1: Terrible
 
-            Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "grade","<grade>"}}].
+            Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "grade":"<grade>"}}].
         '''
         aai.settings.api_key = api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
         result = transcript_group.lemur.task(
             prompt=prompt,
             max_output_size=4000,
-            final_model='anthropic/claude-2-1'
+            final_model='anthropic/claude-3-5-sonnet'
         )
         return parse_json(result.response)
     except RetryError:
@@ -171,14 +170,14 @@ def interviewer_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_a
             2: Unneccessary
             1: Completely Irrelevant
 
-            Return the data in the following JSON format: [{{"question":"<question>", "grade","<grade>"}}].
+            Return the data in the following JSON format: [{{"question":"<question>", "grade":"<grade>"}}].
         '''
         aai.settings.api_key = api_key
         transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
         result = transcript_group.lemur.task(
             prompt=prompt,
             max_output_size=4000,
-            final_model='anthropic/claude-2-1'
+            final_model='anthropic/claude-3-5-sonnet'
         )
         return parse_json(result.response)
     except RetryError:
@@ -202,7 +201,7 @@ def generate_summary_paragraph(transcript_id, api_key):
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
         answer_format="paragraph",
         max_output_size=4000,
-        final_model='anthropic/claude-2-1'
+        final_model='anthropic/claude-3-5-sonnet'
     )
     return result.response
 
@@ -214,7 +213,7 @@ def generate_summary_topics(transcript_id, api_key):
         context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
         answer_format="**<topic header>**\n<topic summary>\n",
         max_output_size=4000,
-        final_model='anthropic/claude-2-1'
+        final_model='anthropic/claude-3-5-sonnet'
     )
     return result.response
 
@@ -225,7 +224,7 @@ def generate_summary_questions(transcript_id):
         context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
         answer_format="<Interview Question>,• <Candidate Response>",
         max_output_size=4000,
-        final_model='anthropic/claude-2-1'
+        final_model='anthropic/claude-3-5-sonnet'
     )
     return result.response
 
@@ -261,7 +260,6 @@ def parse_json(response_string):
         # # errors are irrelevant, moves on if not found
         print(f"Error decoding JSON: {e}")
         return [] 
-    
 
 def calculateQualityScore(arr):
     points = 0
@@ -295,12 +293,16 @@ if 'local_file' not in st.session_state:
     st.session_state.local_file = None
 if 'url_input' not in st.session_state:
     st.session_state.url_input = ''
+if 'transcript_text_input' not in st.session_state:  # New state for transcript text input
+    st.session_state.transcript_text_input = ''
 if 'job_description' not in st.session_state:
     st.session_state.job_description = ''
 if 'skills' not in st.session_state:
     st.session_state.skills = ''
 if 'transcript_text' not in st.session_state:
     st.session_state.transcript_text = ''
+if 'transcript_format' not in st.session_state:  # New state for transcript format selection
+    st.session_state.transcript_format = 'Transcript ID'
 
 st.title('Interviewer Audit and Candidate Assessment')
 
@@ -311,10 +313,18 @@ if st.session_state.homepage:
     st.session_state.api_key = api_key
 
     # File
-    st.write('Provide either a transcript id, url of your interview file, or a local file.')
-    transcript_id_input = st.text_input('Enter your transcript id','')
-    local_file = st.file_uploader('Or upload your interview audio/video transcript', accept_multiple_files=False)
-    url_input = st.text_input('Or enter the URL of interview transcript', '')
+    st.write('Provide your interview transcript in one of the following formats:')
+    transcript_format = st.selectbox('Transcript Format', ('Transcript ID', 'Audio File', 'Audio File URL', 'Transcript Text'))
+    st.session_state.transcript_format = transcript_format  # Store the selected format
+
+    if transcript_format == 'Transcript ID':
+        transcript_id_input = st.text_input('Enter your transcript id','')
+    elif transcript_format == 'Audio File':
+        local_file = st.file_uploader('Upload your interview audio/video transcript', accept_multiple_files=False)
+    elif transcript_format == 'Audio File URL':
+        url_input = st.text_input('Enter the URL of interview transcript', '')
+    elif transcript_format == 'Transcript Text':
+        transcript_text_input = st.text_area('Enter your transcript text', height=200)
 
     # jd and skills
     st.write('Enter job description and skills list')
@@ -325,13 +335,20 @@ if st.session_state.homepage:
     button = st.button('Submit')
 
     if button:
-        if transcript_id_input == '' and local_file is None and url_input == '':
-            st.write('Please input a file or URL.')
+        if transcript_format == 'Transcript ID' and transcript_id_input == '':
+            st.write('Please input a transcript ID.')
+        elif transcript_format == 'Audio File' and local_file is None:
+            st.write('Please upload an audio file.')
+        elif transcript_format == 'Audio File URL' and url_input == '':
+            st.write('Please input an audio file URL.')
+        elif transcript_format == 'Transcript Text' and transcript_text_input == '':
+            st.write('Please input your transcript text.')
         else:
             st.session_state.homepage = False
             st.session_state.transcript_id_input = transcript_id_input
             st.session_state.local_file = local_file
             st.session_state.url_input = url_input
+            st.session_state.transcript_text_input = transcript_text_input  # Store transcript text input
             st.session_state.job_description = job_description
             st.session_state.skills = skills
             st.rerun()
