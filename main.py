@@ -359,45 +359,63 @@ else: #running or complete page
     if st.session_state.complete == False:
         st.write('')
         with st.spinner('Loading...'):
+            transcript_id = None  # Initialize transcript_id
             transcript_id_input = st.session_state.transcript_id_input
             local_file = st.session_state.local_file
             url_input = st.session_state.url_input
-            transcript_text_input = st.session_state.transcript_text_input
             job_description = st.session_state.job_description
             skills = st.session_state.skills
 
-            # Determine transcript_id based on the selected format
-            if st.session_state.transcript_format == 'Transcript ID':
-                transcript_id = transcript_id_input
-            elif st.session_state.transcript_format == 'Audio File':
-                file_bytes = local_file.read()
-                file_extension = Path(local_file.name).suffix
-                with open(f'temp_file{file_extension}', 'wb') as temp_file:
-                    temp_file.write(file_bytes)
-                transcript_id = transcribe_file(f'temp_file{file_extension}')
-            elif st.session_state.transcript_format == 'Audio File URL':
-                transcript_id = transcribe_file(url_input)
-            elif st.session_state.transcript_format == 'Transcript Text':
-                # For transcript text, directly use the input
-                st.session_state.transcript_text = transcript_text_input 
-                transcript_id = None  # or some placeholder value if needed
+            try:
+                if transcript_id_input != '':
+                    transcript_id = transcript_id_input
+                elif local_file is not None:
+                    file_bytes = local_file.read()
+                    # Get the file extension from the local file name
+                    file_extension = Path(local_file.name).suffix
 
-            if transcript_id: # Only proceed if transcript_id is valid
-                st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
+                    # Save file before transcribing with the original extension
+                    with open(f'temp_file{file_extension}', 'wb') as temp_file:
+                        temp_file.write(file_bytes)
 
+                    # API call to transcribe the file
+                    transcript_id = transcribe_file(f'temp_file{file_extension}')
+                elif url_input != '':
+                    transcript_id = transcribe_file(url_input)
+                else:
+                    st.error('Please input a file or URL.')
+                    st.stop()
+
+                if transcript_id is None:
+                    st.error('Failed to obtain transcript ID')
+                    st.stop()
+
+                # Get transcript text
+                transcript = aai.Transcript.get_by_id(transcript_id)
+                if transcript is None:
+                    st.error('Failed to retrieve transcript')
+                    st.stop()
+                    
+                st.session_state.transcript_text = transcript.text
+                
                 print('starting q_a_request')
-                q_and_a_arr = get_questions(transcript_id,job_description,api_key)
+                q_and_a_arr = get_questions(transcript_id, job_description, api_key)
                 print(q_and_a_arr)
-            with ThreadPoolExecutor() as executor:
-                # These 2 below can be split into more requests, likely enabling the execution of the code
-                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                future_7 = executor.submit(get_skills, transcript_id, job_description, skills, api_key, q_and_a_arr)
 
-                future_3 = executor.submit(generate_summary_paragraph,transcript_id, api_key)
-                future_4 = executor.submit(generate_summary_topics,transcript_id, api_key)
-                # future_5 = executor.submit(generate_summary_questions,transcript_id)
-                future_6 = executor.submit(generate_question_answer,transcript_id, api_key)
+                # Continue with the rest of your code...
+                with ThreadPoolExecutor() as executor:
+                    future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
+                    future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
+                    future_7 = executor.submit(get_skills, transcript_id, job_description, skills, api_key, q_and_a_arr)
+                    future_3 = executor.submit(generate_summary_paragraph, transcript_id, api_key)
+                    future_4 = executor.submit(generate_summary_topics, transcript_id, api_key)
+                    future_6 = executor.submit(generate_question_answer, transcript_id, api_key)
+
+                # Rest of your code...
+
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
+                st.stop()
 
 
             skills = future_7.result()
