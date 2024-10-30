@@ -359,50 +359,46 @@ else: #running or complete page
     if st.session_state.complete == False:
         st.write('')
         with st.spinner('Loading...'):
-            transcript_id = None  # Initialize transcript_id
+            transcript_id = None
             transcript_id_input = st.session_state.transcript_id_input
             local_file = st.session_state.local_file
             url_input = st.session_state.url_input
+            transcript_text_input = st.session_state.transcript_text_input
             job_description = st.session_state.job_description
             skills = st.session_state.skills
 
             try:
-                if transcript_id_input != '':
+                if transcript_id_input:
                     transcript_id = transcript_id_input
                 elif local_file is not None:
                     file_bytes = local_file.read()
-                    # Get the file extension from the local file name
                     file_extension = Path(local_file.name).suffix
-
-                    # Save file before transcribing with the original extension
                     with open(f'temp_file{file_extension}', 'wb') as temp_file:
                         temp_file.write(file_bytes)
-
-                    # API call to transcribe the file
                     transcript_id = transcribe_file(f'temp_file{file_extension}')
-                elif url_input != '':
+                elif url_input:
                     transcript_id = transcribe_file(url_input)
+                elif transcript_text_input:
+                    # Handle transcript text input
+                    # You might need to create a transcript from this text
+                    # or use it directly in your analysis
+                    st.session_state.transcript_text = transcript_text_input
                 else:
-                    st.error('Please input a file or URL.')
+                    st.error('Please input a transcript ID, upload an audio file, provide a URL, or enter transcript text.')
                     st.stop()
 
-                if transcript_id is None:
-                    st.error('Failed to obtain transcript ID')
-                    st.stop()
-
-                # Get transcript text
-                transcript = aai.Transcript.get_by_id(transcript_id)
-                if transcript is None:
-                    st.error('Failed to retrieve transcript')
-                    st.stop()
-                    
-                st.session_state.transcript_text = transcript.text
+                if transcript_id:
+                    st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
                 
+                if not st.session_state.transcript_text:
+                    st.error('Failed to obtain transcript text.')
+                    st.stop()
+
+                # Continue with the rest of your code...
                 print('starting q_a_request')
                 q_and_a_arr = get_questions(transcript_id, job_description, api_key)
                 print(q_and_a_arr)
 
-                # Continue with the rest of your code...
                 with ThreadPoolExecutor() as executor:
                     future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
                     future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
@@ -411,35 +407,29 @@ else: #running or complete page
                     future_4 = executor.submit(generate_summary_topics, transcript_id, api_key)
                     future_6 = executor.submit(generate_question_answer, transcript_id, api_key)
 
-                # Rest of your code...
+                skills = future_7.result()
+                temp_candidate_assessment = future_1.result()
+                temp_interviewer_audit = future_2.result()
+
+                # Assuming skills, temp_candidate_assessment, and temp_interviewer_audio are arrays with the same length
+                for i in range(len(temp_candidate_assessment)):
+                    try:
+                        skill = skills[i]['skill']  # Get the skill dictionary at index i
+                        temp_candidate_assessment[i]['skill'] = skill  # Add the skill to the candidate assessment dictionary
+                        temp_interviewer_audit[i]['skill'] = skill  # Add the skill to the interviewer audio dictionary
+                    except: pass
+
+                st.session_state.parsed_candidate_assessment = temp_candidate_assessment
+                st.session_state.parsed_interviewer_audit = temp_interviewer_audit
+                
+                st.session_state.summary_paragraph = future_3.result()
+                st.session_state.summary_topics = future_4.result()
+                st.session_state.question_answer = future_6.result()
+                st.session_state.complete = True
 
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
                 st.stop()
-
-
-            skills = future_7.result()
-            temp_candidate_assessment = future_1.result()
-            temp_interviewer_audit = future_2.result()
-
-            # Assuming skills, temp_candidate_assessment, and temp_interviewer_audio are arrays with the same length
-            for i in range(len(temp_candidate_assessment)):
-                try:
-                    skill = skills[i]['skill']  # Get the skill dictionary at index i
-                    temp_candidate_assessment[i]['skill'] = skill  # Add the skill to the candidate assessment dictionary
-                    temp_interviewer_audit[i]['skill'] = skill  # Add the skill to the interviewer audio dictionary
-                except: pass
-
-
-            st.session_state.parsed_candidate_assessment = temp_candidate_assessment
-            st.session_state.parsed_interviewer_audit = temp_interviewer_audit
-            
-
-            st.session_state.summary_paragraph = future_3.result()
-            st.session_state.summary_topics = future_4.result()
-            # st.session_state.summary_questions = future_5.result()
-            st.session_state.question_answer = future_6.result()
-            st.session_state.complete = True
     
     st.write('')
     button2 = st.button('RESET')
@@ -459,7 +449,6 @@ else: #running or complete page
         st.session_state.question_answer = ''
         st.rerun()
 
-
     st.subheader('Transcript Text:')
     stx.scrollableTextbox(st.session_state.transcript_text)
     st.markdown("\n" * 1)
@@ -472,7 +461,7 @@ else: #running or complete page
             st.write('Answer: ' + q['answer'])
             st.write('Skill: ' + q['skill'])
             st.write('Grade: ' + str(q['grade']))
-        st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ') # Add a line
+        st.markdown('~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ') # Add a line
         st.write("Quality Score: "+str(calculateQualityScore(st.session_state.parsed_candidate_assessment)*100))
         st.write("Quality score formula: (total points)/(5 * # of questions *)")
     if option == 'Interviewer Assessment':
