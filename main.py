@@ -24,25 +24,43 @@ def filter_q_and_a(q_and_a_arr):
     return filtered_arr
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_questions(transcript_id, jd, api_key):
+def get_questions(transcript_id, jd, api_key, transcript_text=None):  # Add transcript_text parameter
     try:
-        prompt = f'''
-            You are reading transcript of a job interview.
+        if transcript_text:  # Use Lemur with input text
+            prompt = f'''
+                You are reading transcript of a job interview.
 
-            Here is the job description for that interview: <jd>{jd}</jd>
+                Here is the job description for that interview: <jd>{jd}</jd>
 
-            Please pull out questions asked by interviewer and responses of the candidate. 
-            Format the questions as if they were appearing on a test.
+                Please pull out questions asked by interviewer and responses of the candidate. 
+                Format the questions as if they were appearing on a test.
 
-            Return data in following JSON format: [{{"question":"<question>","answer":"<answer>"}}].
-        '''
-        aai.settings.api_key = api_key
-        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
-        result = transcript_group.lemur.task(
-            prompt=prompt,
-            max_output_size=4000,
-            final_model='anthropic/claude-3-5-sonnet'
-        )
+                Return data in following JSON format: [{{"question":"<question>","answer":"<answer>"}}].
+            '''
+            result = aai.Lemur().task(
+                prompt=prompt,
+                input_text=transcript_text,  # Pass transcript_text to Lemur
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            prompt = f'''
+                You are reading transcript of a job interview.
+
+                Here is the job description for that interview: <jd>{jd}</jd>
+
+                Please pull out questions asked by interviewer and responses of the candidate. 
+                Format the questions as if they were appearing on a test.
+
+                Return data in following JSON format: [{{"question":"<question>","answer":"<answer>"}}].
+            '''
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
+            result = transcript_group.lemur.task(
+                prompt=prompt,
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
         print(result.response)
         q_and_a_arr = filter_q_and_a(parse_json(result.response))
 
@@ -64,27 +82,47 @@ def get_questions(transcript_id, jd, api_key):
         raise
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def get_skills(transcript_id, jd, skills, api_key, q_and_a_arr):
+def get_skills(transcript_id, jd, skills, api_key, q_and_a_arr, transcript_text=None):  # Add transcript_text parameter
     try:
-        new_prompt = f'''
-            You are reading transcript of a job interview.
+        if transcript_text:  # Use Lemur with input text
+            new_prompt = f'''
+                You are reading transcript of a job interview.
 
-            Here is the job description for that interview: <jd>{jd}</jd>
+                Here is the job description for that interview: <jd>{jd}</jd>
 
-            Here is an array of the questions asked by the interviewer and the candidates answer in the transcript: {json.dumps(q_and_a_arr)}
-            Reference the transcript for a more complete understanding of the candidates answer.
+                Here is an array of the questions asked by the interviewer and the candidates answer in the transcript: {json.dumps(q_and_a_arr)}
+                Reference the transcript for a more complete understanding of the candidates answer.
 
-            Tag each question and answer pair as relating to one of following skills:{skills}
+                Tag each question and answer pair as relating to one of following skills:{skills}
 
-            Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "skill":"<skill>"}}].
-        '''
-        aai.settings.api_key = api_key
-        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
-        result = transcript_group.lemur.task(
-            prompt=new_prompt,
-            max_output_size=4000,
-            final_model='anthropic/claude-3-5-sonnet'
-        )
+                Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "skill":"<skill>"}}].
+            '''
+            result = aai.Lemur().task(
+                prompt=new_prompt,
+                input_text=transcript_text,  # Pass transcript_text to Lemur
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            new_prompt = f'''
+                You are reading transcript of a job interview.
+
+                Here is the job description for that interview: <jd>{jd}</jd>
+
+                Here is an array of the questions asked by the interviewer and the candidates answer in the transcript: {json.dumps(q_and_a_arr)}
+                Reference the transcript for a more complete understanding of the candidates answer.
+
+                Tag each question and answer pair as relating to one of following skills:{skills}
+
+                Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "skill":"<skill>"}}].
+            '''
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
+            result = transcript_group.lemur.task(
+                prompt=new_prompt,
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
         print(result.response)
         final_q_and_a_arr = parse_json(result.response)
         if not final_q_and_a_arr:
@@ -106,33 +144,59 @@ def get_skills(transcript_id, jd, skills, api_key, q_and_a_arr):
 
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def candidate_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_arr):
+def candidate_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_arr, transcript_text=None):  # Add transcript_text parameter
     try:
-        prompt = f'''
-            You are reading transcript of a job interview.
+        if transcript_text:  # Use Lemur with input text
+            prompt = f'''
+                You are reading transcript of a job interview.
 
-            Here is the job description for that interview: <jd>{jd}</jd>
+                Here is the job description for that interview: <jd>{jd}</jd>
 
-            Here is an array of objects that each include a question asked by the interviewer, the candidates answer to the question, and the related skill: {json.dumps(q_and_a_arr)}
-            For each question, reference the transcript for a more complete understanding of the candidates answer.
+                Here is an array of objects that each include a question asked by the interviewer, the candidates answer to the question, and the related skill: {json.dumps(q_and_a_arr)}
+                For each question, reference the transcript for a more complete understanding of the candidates answer.
 
-            As a candidate assessor, please grade candidates answers to questions with an integer grade based on rubric below:
-            Rubric:
-            5: Excellent
-            4: Good
-            3: Mediocre
-            2: Bad
-            1: Terrible
+                As a candidate assessor, please grade candidates answers to questions with an integer grade based on rubric below:
+                Rubric:
+                5: Excellent
+                4: Good
+                3: Mediocre
+                2: Bad
+                1: Terrible
 
-            Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "grade":"<grade>"}}].
-        '''
-        aai.settings.api_key = api_key
-        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
-        result = transcript_group.lemur.task(
-            prompt=prompt,
-            max_output_size=4000,
-            final_model='anthropic/claude-3-5-sonnet'
-        )
+                Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "grade":"<grade>"}}].
+            '''
+            result = aai.Lemur().task(
+                prompt=prompt,
+                input_text=transcript_text,  # Pass transcript_text to Lemur
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            prompt = f'''
+                You are reading transcript of a job interview.
+
+                Here is the job description for that interview: <jd>{jd}</jd>
+
+                Here is an array of objects that each include a question asked by the interviewer, the candidates answer to the question, and the related skill: {json.dumps(q_and_a_arr)}
+                For each question, reference the transcript for a more complete understanding of the candidates answer.
+
+                As a candidate assessor, please grade candidates answers to questions with an integer grade based on rubric below:
+                Rubric:
+                5: Excellent
+                4: Good
+                3: Mediocre
+                2: Bad
+                1: Terrible
+
+                Return data in following JSON format: [{{"question":"<question>","answer":"<answer>", "grade":"<grade>"}}].
+            '''
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id]) 
+            result = transcript_group.lemur.task(
+                prompt=prompt,
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
         return parse_json(result.response)
     except RetryError:
         # Handle the case when all retries are used
@@ -148,37 +212,67 @@ def candidate_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_arr
         raise
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def interviewer_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_arr):
+def interviewer_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_arr, transcript_text=None):  # Add transcript_text parameter
     try:
-        prompt = f'''
-            You are reading a transcript of a job interview.
+        if transcript_text:  # Use Lemur with input text
+            prompt = f'''
+                You are reading a transcript of a job interview.
 
-            Here is the job description for that interview: <jd>{jd}</jd>
+                Here is the job description for that interview: <jd>{jd}</jd>
 
-            Here is an array of objects that each include a question asked by the interviewer, the candidates answer to the question, and the related skill: {json.dumps(q_and_a_arr)}
-            Reference the transcript for a more complete understanding of the candidates answer.
+                Here is an array of objects that each include a question asked by the interviewer, the candidates answer to the question, and the related skill: {json.dumps(q_and_a_arr)}
+                Reference the transcript for a more complete understanding of the candidates answer.
 
-            As an interviewer assessor, your role involves evaluating the relevance of each question posed by the interviewer. 
-            Avoid assigning low grades unless the questions lack relevance to the job description. 
-            Questions pertaining to soft skills and background, such as "tell me about yourself" and "how do you work in teams," should be considered essential.
-            
-            Please grade the interviewers questions with an integer grade based on the rubric below:
-            Rubric:
-            5: Very Necessary
-            4: Critical
-            3: Optional
-            2: Unneccessary
-            1: Completely Irrelevant
+                As an interviewer assessor, your role involves evaluating the relevance of each question posed by the interviewer. 
+                Avoid assigning low grades unless the questions lack relevance to the job description. 
+                Questions pertaining to soft skills and background, such as "tell me about yourself" and "how do you work in teams," should be considered essential.
+                
+                Please grade the interviewers questions with an integer grade based on the rubric below:
+                Rubric:
+                5: Very Necessary
+                4: Critical
+                3: Optional
+                2: Unneccessary
+                1: Completely Irrelevant
 
-            Return the data in the following JSON format: [{{"question":"<question>", "grade":"<grade>"}}].
-        '''
-        aai.settings.api_key = api_key
-        transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
-        result = transcript_group.lemur.task(
-            prompt=prompt,
-            max_output_size=4000,
-            final_model='anthropic/claude-3-5-sonnet'
-        )
+                Return the data in the following JSON format: [{{"question":"<question>", "grade":"<grade>"}}].
+            '''
+            result = aai.Lemur().task(
+                prompt=prompt,
+                input_text=transcript_text,  # Pass transcript_text to Lemur
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            prompt = f'''
+                You are reading a transcript of a job interview.
+
+                Here is the job description for that interview: <jd>{jd}</jd>
+
+                Here is an array of objects that each include a question asked by the interviewer, the candidates answer to the question, and the related skill: {json.dumps(q_and_a_arr)}
+                Reference the transcript for a more complete understanding of the candidates answer.
+
+                As an interviewer assessor, your role involves evaluating the relevance of each question posed by the interviewer. 
+                Avoid assigning low grades unless the questions lack relevance to the job description. 
+                Questions pertaining to soft skills and background, such as "tell me about yourself" and "how do you work in teams," should be considered essential.
+                
+                Please grade the interviewers questions with an integer grade based on the rubric below:
+                Rubric:
+                5: Very Necessary
+                4: Critical
+                3: Optional
+                2: Unneccessary
+                1: Completely Irrelevant
+
+                Return the data in the following JSON format: [{{"question":"<question>", "grade":"<grade>"}}].
+            '''
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
+            result = transcript_group.lemur.task(
+                prompt=prompt,
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
         return parse_json(result.response)
     except RetryError:
         # Handle the case when all retries are used
@@ -194,54 +288,145 @@ def interviewer_quality_assessment(transcript_id, jd, skills, api_key, q_and_a_a
         raise
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_summary_paragraph(transcript_id, api_key):
-    aai.settings.api_key = api_key
-    transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
-    result = transcript_group.lemur.summarize(
-        context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
-        answer_format="paragraph",
-        max_output_size=4000,
-        final_model='anthropic/claude-3-5-sonnet'
-    )
-    return result.response
+def generate_summary_paragraph(transcript_id, api_key, transcript_text=None):  # Add transcript_text parameter
+    try:
+        if transcript_text:  # Use Lemur with input text
+            result = aai.Lemur().summarize(
+                context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
+                answer_format="paragraph",
+                input_text=transcript_text,  # Pass transcript_text to summarize
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
+            result = transcript_group.lemur.summarize(
+                context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
+                answer_format="paragraph",
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        return result.response
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty string.")
+        return ''
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        try:
+            if '429' in e:
+                sleep(60)
+        except: pass
+        raise
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_summary_topics(transcript_id, api_key):
-    aai.settings.api_key = api_key
-    transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
-    result = transcript_group.lemur.summarize(
-        context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
-        answer_format="**<topic header>**\n<topic summary>\n",
-        max_output_size=4000,
-        final_model='anthropic/claude-3-5-sonnet'
-    )
-    return result.response
+def generate_summary_topics(transcript_id, api_key, transcript_text=None):  # Add transcript_text parameter
+    try:
+        if transcript_text:  # Use Lemur with input text
+            result = aai.Lemur().summarize(
+                context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
+                answer_format="**<topic header>**\n<topic summary>\n",
+                input_text=transcript_text,  # Pass transcript_text to summarize
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
+            result = transcript_group.lemur.summarize(
+                context="you are the interviewer on this meeting. your job is to write a fact-based candidate summary for the hiring manager to review. do not include any opinions or details that are not directly from the interview. Focus the summary on the candidate background and motiviations for the role",
+                answer_format="**<topic header>**\n<topic summary>\n",
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        return result.response
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty string.")
+        return ''
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        try:
+            if '429' in e:
+                sleep(60)
+        except: pass
+        raise
+
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_summary_questions(transcript_id):
-    transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
-    result = transcript_group.lemur.summarize(
-        context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
-        answer_format="<Interview Question>,• <Candidate Response>",
-        max_output_size=4000,
-        final_model='anthropic/claude-3-5-sonnet'
-    )
-    return result.response
+def generate_summary_questions(transcript_id, transcript_text=None):  # Add transcript_text parameter
+    try:
+        if transcript_text:  # Use Lemur with input text
+            result = aai.Lemur().summarize(
+                context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
+                answer_format="<Interview Question>,• <Candidate Response>",
+                input_text=transcript_text,  # Pass transcript_text to summarize
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        else:  # Use Lemur with transcript ID
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])  
+            result = transcript_group.lemur.summarize(
+                context="list the questions the interviewer asked the candidate. for each interview question, list the candidate response in bullet points",
+                answer_format="<Interview Question>,• <Candidate Response>",
+                max_output_size=4000,
+                final_model='anthropic/claude-3-5-sonnet'
+            )
+        return result.response
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty string.")
+        return ''
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        try:
+            if '429' in e:
+                sleep(60)
+        except: pass
+        raise
 
 @retry(wait_fixed=1000, stop_max_attempt_number=10)
-def generate_question_answer(transcript_id, api_key):
-    aai.settings.api_key = api_key
-    transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])
-    # ask some questions
-    questions = [
-        aai.LemurQuestion(question="what role is the candidate interviewing for?"),
-        aai.LemurQuestion(question="what is the candidate's relevant skills or background?"),
-        aai.LemurQuestion(question="how many years of relevant experience does the candidate? provide context for your answer?",answer_options=["1-3","4-7","more than 7","Unknown"]),
-        aai.LemurQuestion(question="what are the candidate's strengths and weaknesses?"),
-        aai.LemurQuestion(question="what questions did the candidate ask the interviewer?",answer_format="bullet points"),
-    ]  
-    result = transcript_group.lemur.question(questions)
-    return result.response
+def generate_question_answer(transcript_id, api_key, transcript_text=None):  # Add transcript_text parameter
+    try:
+        if transcript_text:  # Use Lemur with input text
+            # ask some questions
+            questions = [
+                aai.LemurQuestion(question="what role is the candidate interviewing for?"),
+                aai.LemurQuestion(question="what is the candidate's relevant skills or background?"),
+                aai.LemurQuestion(question="how many years of relevant experience does the candidate? provide context for your answer?",answer_options=["1-3","4-7","more than 7","Unknown"]),
+                aai.LemurQuestion(question="what are the candidate's strengths and weaknesses?"),
+                aai.LemurQuestion(question="what questions did the candidate ask the interviewer?",answer_format="bullet points"),
+            ]  
+            result = aai.Lemur().question(questions, input_text=transcript_text)  # Pass transcript_text to question
+        else:  # Use Lemur with transcript ID
+            aai.settings.api_key = api_key
+            transcript_group = aai.TranscriptGroup.get_by_ids([transcript_id])
+            # ask some questions
+            questions = [
+                aai.LemurQuestion(question="what role is the candidate interviewing for?"),
+                aai.LemurQuestion(question="what is the candidate's relevant skills or background?"),
+                aai.LemurQuestion(question="how many years of relevant experience does the candidate? provide context for your answer?",answer_options=["1-3","4-7","more than 7","Unknown"]),
+                aai.LemurQuestion(question="what are the candidate's strengths and weaknesses?"),
+                aai.LemurQuestion(question="what questions did the candidate ask the interviewer?",answer_format="bullet points"),
+            ]  
+            result = transcript_group.lemur.question(questions)
+        return result.response
+    except RetryError:
+        # Handle the case when all retries are used
+        print("All retries used. Returning empty list.")
+        return []
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Re-running LeMUR Request")
+        try:
+            if '429' in e:
+                sleep(60)
+        except: pass
+        raise
 
 def parse_json(response_string):
     # Remove newline characters
@@ -364,16 +549,16 @@ else: #running or complete page
                 st.session_state.transcript_text = aai.Transcript.get_by_id(transcript_id).text
             
             print('starting q_a_request')
-            q_and_a_arr = get_questions(transcript_id, job_description, api_key)
+            q_and_a_arr = get_questions(transcript_id, job_description, api_key, st.session_state.transcript_text)  # Pass transcript_text to get_questions
             print(q_and_a_arr)
 
             with ThreadPoolExecutor() as executor:
-                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                future_7 = executor.submit(get_skills, transcript_id, job_description, skills, api_key, q_and_a_arr)
-                future_3 = executor.submit(generate_summary_paragraph, transcript_id, api_key)
-                future_4 = executor.submit(generate_summary_topics, transcript_id, api_key)
-                future_6 = executor.submit(generate_question_answer, transcript_id, api_key)
+                future_1 = executor.submit(candidate_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr, st.session_state.transcript_text)  # Pass transcript_text to candidate_quality_assessment
+                future_2 = executor.submit(interviewer_quality_assessment, transcript_id, job_description, skills, api_key, q_and_a_arr, st.session_state.transcript_text)  # Pass transcript_text to interviewer_quality_assessment
+                future_7 = executor.submit(get_skills, transcript_id, job_description, skills, api_key, q_and_a_arr, st.session_state.transcript_text)  # Pass transcript_text to get_skills
+                future_3 = executor.submit(generate_summary_paragraph, transcript_id, api_key, st.session_state.transcript_text)  # Pass transcript_text to generate_summary_paragraph
+                future_4 = executor.submit(generate_summary_topics, transcript_id, api_key, st.session_state.transcript_text)  # Pass transcript_text to generate_summary_topics
+                future_6 = executor.submit(generate_question_answer, transcript_id, api_key, st.session_state.transcript_text)  # Pass transcript_text to generate_question_answer
 
             skills = future_7.result()
             temp_candidate_assessment = future_1.result()
